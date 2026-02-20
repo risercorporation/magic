@@ -64,8 +64,7 @@
 <body>
 
     <audio id="thunder_snd" src="thunder.mp3" loop></audio>
-
-    <div id="ui-overlay">
+    <audio id="purple_snd" src="purple.mp3" loop></audio> <div id="ui-overlay">
         <div class="design-box">
             <a href="https://instagram.com/soham_sardar" target="_blank" class="insta-link">
                 <span class="handle">@soham_sardar</span>
@@ -88,6 +87,7 @@
         const canvasCtx = canvasElement.getContext('2d');
         const errorUI = document.getElementById('error-msg');
         const thunderAudio = document.getElementById('thunder_snd');
+        const purpleAudio = document.getElementById('purple_snd'); // VARIABLE ADDED
 
         let bridgeBlocks = []; 
         const PINCH_DIST = 40; 
@@ -407,6 +407,16 @@
                 }
             } else {
                 if (!thunderAudio.paused) thunderAudio.pause();
+            }
+
+            // --- NAYA SOUND LOGIC ADDED ---
+            if (hollowPurpleActive) {
+                if (purpleAudio.paused) purpleAudio.play().catch(e => {});
+            } else {
+                if (!purpleAudio.paused) {
+                    purpleAudio.pause();
+                    purpleAudio.currentTime = 0;
+                }
             }
 
             // Domain Intensity
