@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>science pro</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        :root {
+            --thunder-blue: #e6ff01;
+            --thunder-cyan: #2600ff;
+            --thunder-glow: rgb(93, 0, 255);
+            --core-white: #ffffff;
+            --bg-dark: #000000;
+            --insta-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            overflow: hidden; background-color: var(--bg-dark);
+            font-family: 'Courier New', monospace;
+        }
+
+        #input_video { display: none; }
+        #output_canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1; object-fit: cover;
+            transition: filter 0.3s ease;
+        }
+        #ui-overlay {
+            position: absolute; top: 20px; left: 50%;
+            transform: translateX(-50%); z-index: 10;
+            pointer-events: auto; text-align: center;
+        }
+
+        .design-box {
+            background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 20px;
+            padding: 15px 30px; box-shadow: 0 0 40px rgba(0, 0, 0, 0.8), inset 0 0 15px rgba(0, 240, 255, 0.1);
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .insta-link {
+            display: flex; align-items: center; justify-content: center;
+            text-decoration: none; color: white; font-weight: bold; font-size: 18px;
+            letter-spacing: 1px; transition: transform 0.2s ease;
+        }
+
+        .handle {
+            background: var(--insta-gradient); -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent; text-shadow: 0 0 5px rgba(255,255,255,0.2);
+        }
+
+        #error-msg {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #ff3333; text-align: center; display: none; z-index: 100;
+            background: rgba(0,0,0,0.8); padding: 20px; border: 1px solid #ff3333;
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="thunder_snd" src="thunder.mp3" loop></audio>
+
+    <div id="ui-overlay">
+        <div class="design-box">
+            <a href="https://instagram.com/soham_sardar" target="_blank" class="insta-link">
+                <span class="handle">@soham_sardar</span>
+            </a>
+        </div>
+    </div>
+
+    <div id="error-msg">
+        <h2>HARDWARE_ACCESS_ERROR</h2>
+        <p id="error-text">Please allow camera permissions.</p>
+        <button onclick="location.reload()" style="background:none; border:1px solid #ff3333; color:#ff3333; padding:10px; cursor:pointer;">RETRY_LINK</button>
+    </div>
+
+    <video id="input_video" playsinline></video>
+    <canvas id="output_canvas"></canvas>
+
+    <script>
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const errorUI = document.getElementById('error-msg');
+        const thunderAudio = document.getElementById('thunder_snd');
+
+        let bridgeBlocks = []; 
+        const PINCH_DIST = 40; 
+        const SNAP_SIZE = 30;
+
+        let purpleScale = 0; 
+        let purpleParticles = [];
+
+        // --- NEW: Sukuna Domain Variables ---
+        let domainIntensity = 0;
+        let domainSplashes = [];
+
+        function resize() {
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- NEW: Sukuna Domain Visual Effect ---
+        function drawSukunaDomain(ctx) {
+            if (domainIntensity <= 0) return;
+
+            // 1. Darkness Overlay
+            ctx.save();
+            ctx.fillStyle = `rgba(0, 0, 0, ${domainIntensity * 0.6})`;
+            ctx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+
+            // 2. Generate Splashes
+            if (Math.random() > 0.8 && domainSplashes.length < 15) {
+                domainSplashes.push({
+                    x: Math.random() * canvasElement.width,
+                    y: Math.random() * canvasElement.height,
+                    size: 50 + Math.random() * 150,
+                    opacity: 1,
+                    rotation: Math.random() * Math.PI * 2
+                });
+            }
+
+            // 3. Draw Splashes
+            domainSplashes.forEach((s, i) => {
+                ctx.save();
+                ctx.translate(s.x, s.y);
+                ctx.rotate(s.rotation);
+                ctx.globalAlpha = s.opacity * domainIntensity;
+                ctx.fillStyle = "#1a0000"; // Deep dark red/black
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = "red";
+                
+                // Irregular Ink Shape
+                ctx.beginPath();
+                for(let j=0; j<10; j++) {
+                    let angle = (j/10) * Math.PI * 2;
+                    let r = s.size * (0.6 + Math.random() * 0.4);
+                    ctx.lineTo(Math.cos(angle)*r, Math.sin(angle)*r);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+
+                s.opacity -= 0.02;
+                if(s.opacity <= 0) domainSplashes.splice(i, 1);
+            });
+
+            // 4. Global Brightness/Contrast Boost
+            canvasElement.style.filter = `brightness(${1 + domainIntensity * 0.5}) contrast(${1 + domainIntensity})`;
+            ctx.restore();
+        }
+
+        function drawHollowPurple(ctx, x, y) {
+            ctx.save();
+            const time = Date.now() * 0.002;
+            if (purpleScale < 1) purpleScale += 0.04; 
+            const baseRadius = 100 * purpleScale; 
+
+            if (purpleParticles.length < 15) {
+                purpleParticles.push({
+                    x: 0, y: 0, 
+                    vx: (Math.random() - 0.5) * 15, 
+                    vy: (Math.random() - 0.5) * 15,
+                    life: 1.0
+                });
+            }
+
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+            ctx.lineWidth = 2;
+            purpleParticles.forEach((p, i) => {
+                ctx.beginPath();
+                ctx.moveTo(x + p.x, y + p.y);
+                p.x += p.vx; p.y += p.vy;
+                p.life -= 0.05;
+                ctx.lineTo(x + p.x + (Math.random()-0.5)*10, y + p.y + (Math.random()-0.5)*10);
+                ctx.stroke();
+                if(p.life <= 0) purpleParticles.splice(i, 1);
+            });
+
+            let outerGrad = ctx.createRadialGradient(x, y, 10, x, y, baseRadius + 60);
+            outerGrad.addColorStop(0, 'rgba(120, 0, 255, 0.3)');
+            outerGrad.addColorStop(1, 'transparent');
+            ctx.fillStyle = outerGrad;
+            ctx.beginPath();
+            ctx.arc(x, y, baseRadius + 70, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.lineWidth = 3;
+            for(let i=0; i<3; i++) {
+                ctx.strokeStyle = i % 2 === 0 ? "rgba(255, 255, 255, 0.6)" : "rgba(180, 0, 255, 0.8)";
+                ctx.beginPath();
+                const r = baseRadius + (i * 12);
+                const rot = time * (i + 2);
+                ctx.arc(x, y, r, rot, rot + Math.PI * 0.8);
+                ctx.stroke();
+            }
+
+            let mainGrad = ctx.createRadialGradient(x, y, 0, x, y, baseRadius);
+            mainGrad.addColorStop(0, '#ffffff'); 
+            mainGrad.addColorStop(0.2, '#cc00ff'); 
+            mainGrad.addColorStop(0.5, '#4b0082'); 
+            mainGrad.addColorStop(1, 'transparent');
+            ctx.shadowBlur = 40;
+            ctx.shadowColor = "#ff00ff";
+            ctx.fillStyle = mainGrad;
+            ctx.beginPath();
+            ctx.arc(x, y, baseRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawBlock(ctx, x, y) {
+            const s = 14;
+            ctx.save();
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "rgba(0, 240, 255, 1)";
+            ctx.fillStyle = "rgba(0, 240, 255, 0.9)";
+            ctx.fillRect(x - s, y - s, s * 2, s * 2);
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x - s, y - s, s * 2, s * 2);
+            ctx.beginPath();
+            ctx.moveTo(x-s, y-s); ctx.lineTo(x-s+5, y-s-5);
+            ctx.lineTo(x+s+5, y-s-5); ctx.lineTo(x+s, y-s);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+            ctx.fill(); ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawConnectingBridge(ctx) {
+            if (bridgeBlocks.length < 2) return;
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = "rgba(0, 240, 255, 0.4)";
+            ctx.lineWidth = 5;
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(bridgeBlocks[0].x, bridgeBlocks[0].y);
+            for (let i = 1; i < bridgeBlocks.length; i++) { ctx.lineTo(bridgeBlocks[i].x, bridgeBlocks[i].y); }
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawFingerCircle(ctx, x, y, radius) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "rgba(0, 240, 255, 1.0)";
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawLightningAura(ctx, x1, y1, x2, y2, displace, segmentsMultiplier = 1) {
+            const dx = x2 - x1; const dy = y2 - y1;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const segments = Math.min(50, Math.floor((dist / 8) * segmentsMultiplier));
+            const unitX = dx / dist; const unitY = dy / dist;
+            const perpX = -unitY; const perpY = unitX;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            for (let i = 1; i < segments; i++) {
+                const ratio = i / segments;
+                const jitter = (Math.random() - 0.5) * displace;
+                ctx.lineTo(x1 + dx * ratio + perpX * jitter, y1 + dy * ratio + perpY * jitter);
+            }
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+
+        function drawLightningBolt(ctx, x1, y1, x2, y2, isBranch = false) {
+            const dist = Math.hypot(x2 - x1, y2 - y1);
+            if (dist < 10) return;
+            ctx.save();
+            ctx.strokeStyle = "rgba(0, 240, 255, 0.15)";
+            ctx.lineWidth = isBranch ? 2 : 12;
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = "rgba(0, 240, 255, 0.8)";
+            drawLightningAura(ctx, x1, y1, x2, y2, 45);
+            ctx.strokeStyle = "rgba(0, 255, 255, 0.4)";
+            ctx.lineWidth = isBranch ? 1 : 6;
+            ctx.shadowBlur = 30;
+            drawLightningAura(ctx, x1, y1, x2, y2, 25);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+            ctx.lineWidth = isBranch ? 0.5 : 3;
+            ctx.shadowBlur = 15;
+            drawLightningAura(ctx, x1, y1, x2, y2, 12);
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = isBranch ? 0.5 : 2 + Math.random() * 2;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = "#ffffff";
+            drawLightningAura(ctx, x1, y1, x2, y2, 6);
+            ctx.restore();
+        }
+
+        function drawDiamond(ctx, x, y, size) {
+            ctx.beginPath();
+            ctx.moveTo(x, y - size); ctx.lineTo(x + size, y);
+            ctx.lineTo(x, y + size); ctx.lineTo(x - size, y);
+            ctx.closePath(); ctx.stroke();
+        }
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.translate(canvasElement.width, 0); canvasCtx.scale(-1, 1);
+            
+            canvasCtx.globalAlpha = 0.85; 
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.globalAlpha = 1.0;
+
+            let hollowPurpleActive = false;
+            let sukunaActive = false;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const hands = results.multiHandLandmarks.map(landmarks => {
+                    return landmarks.map(lm => ({ x: lm.x * canvasElement.width, y: lm.y * canvasElement.height }));
+                });
+
+                // --- NEW: Sukuna Gesture Detection (Two Hands Joined) ---
+                if (hands.length === 2) {
+                    const h1 = hands[0]; const h2 = hands[1];
+                    const midDist = Math.hypot(h1[12].x - h2[12].x, h1[12].y - h2[12].y);
+                    
+                    // Logic: Middle fingers touching + Index & Pinky bent
+                    const isH1Bent = h1[8].y > h1[6].y && h1[20].y > h1[18].y;
+                    const isH2Bent = h2[8].y > h2[6].y && h2[20].y > h2[18].y;
+                    
+                    if (midDist < 60 && isH1Bent && isH2Bent) {
+                        sukunaActive = true;
+                    }
+                }
+
+                hands.forEach(pts => {
+                    const isIndexUp = pts[8].y < pts[6].y;
+                    const isMiddleUp = pts[12].y < pts[10].y;
+                    const isRingDown = pts[16].y > pts[14].y;
+                    const isPinkyDown = pts[20].y > pts[18].y;
+
+                    if(!isIndexUp && !isMiddleUp && isRingDown && isPinkyDown) { bridgeBlocks = []; }
+
+                    if(isIndexUp && isMiddleUp && isRingDown && isPinkyDown) {
+                        hollowPurpleActive = true;
+                        drawHollowPurple(canvasCtx, (pts[8].x + pts[12].x) / 2, (pts[8].y + pts[12].y) / 2);
+                    }
+
+                    const connections = [[0,1],[1,2],[2,3],[3,4], [0,5],[5,6],[6,7],[7,8],[9,10],[10,11],[11,12], [13,14],[14,15],[15,16],[17,18],[18,19],[19,20], [0,17],[5,9],[9,13],[13,17]];
+                    canvasCtx.beginPath();
+                    connections.forEach(([i, j]) => { canvasCtx.moveTo(pts[i].x, pts[i].y); canvasCtx.lineTo(pts[j].x, pts[j].y); });
+                    canvasCtx.stroke();
+                    [4, 8, 12, 16, 20].forEach(i => drawDiamond(canvasCtx, pts[i].x, pts[i].y, 4));
+                    [4, 8, 12, 16, 20].forEach(i => drawFingerCircle(canvasCtx, pts[i].x, pts[i].y, 10));
+
+                    const thumb = pts[4]; const index = pts[8];
+                    if (Math.hypot(thumb.x - index.x, thumb.y - index.y) < PINCH_DIST) {
+                        let midX = Math.round(((thumb.x + index.x) / 2) / SNAP_SIZE) * SNAP_SIZE;
+                        let midY = Math.round(((thumb.y + index.y) / 2) / SNAP_SIZE) * SNAP_SIZE;
+                        if (bridgeBlocks.length === 0 || Math.hypot(midX - bridgeBlocks[bridgeBlocks.length-1].x, midY - bridgeBlocks[bridgeBlocks.length-1].y) >= SNAP_SIZE) {
+                            bridgeBlocks.push({x: midX, y: midY});
+                        }
+                    }
+                });
+
+                drawConnectingBridge(canvasCtx);
+                bridgeBlocks.forEach(b => drawBlock(canvasCtx, b.x, b.y));
+
+                if (hands.length === 2 && !sukunaActive) {
+                    const h1 = hands[0]; const h2 = hands[1];
+                    const tips = [4, 8, 12, 16, 20];
+                    tips.forEach(i => drawLightningBolt(canvasCtx, h1[i].x, h1[i].y, h2[i].x, h2[i].y));
+                    if (thunderAudio.paused) thunderAudio.play().catch(e => {});
+                } else if (!sukunaActive) {
+                    if (!thunderAudio.paused) thunderAudio.pause();
+                }
+            } else {
+                if (!thunderAudio.paused) thunderAudio.pause();
+            }
+
+            // --- NEW: Sukuna Domain Intensity Logic ---
+            if (sukunaActive) {
+                if (domainIntensity < 1) domainIntensity += 0.05;
+            } else {
+                if (domainIntensity > 0) domainIntensity -= 0.05;
+            }
+            drawSukunaDomain(canvasCtx);
+
+            if(!hollowPurpleActive) { purpleScale = 0; purpleParticles = []; }
+            if(domainIntensity <= 0.01) canvasElement.style.filter = "none";
+
+            canvasCtx.restore();
+        }
+
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.85, minTrackingConfidence: 0.85 });
+        hands.onResults(onResults);
+
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: "user" } 
+                });
+                videoElement.srcObject = stream;
+                videoElement.onloadedmetadata = () => { videoElement.play(); requestAnimationFrame(processFrame); };
+            } catch (err) { errorUI.style.display = "block"; }
+        }
+        async function processFrame() { if (videoElement.readyState >= 2) { await hands.send({image: videoElement}); } requestAnimationFrame(processFrame); }
+        initCamera();
+    </script>
+</body>
+</html>
