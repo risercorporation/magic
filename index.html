@@ -180,6 +180,20 @@
             if (purpleScale < 1) purpleScale += 0.04; 
             const baseRadius = 100 * purpleScale; 
 
+            // --- ADDED: SCREEN DIMMING & SCREEN LIGHTNING ---
+            ctx.fillStyle = `rgba(15, 0, 30, ${0.4 * purpleScale})`;
+            ctx.fillRect(-canvasElement.width, 0, canvasElement.width * 2, canvasElement.height);
+
+            if (Math.random() > 0.8) {
+                ctx.strokeStyle = "rgba(180, 0, 255, 0.8)";
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = "#ff00ff";
+                let startX = Math.random() * canvasElement.width;
+                let startY = Math.random() * canvasElement.height;
+                drawLightningAura(ctx, startX, startY, x, y, 40, 0.6);
+            }
+
             if (purpleParticles.length < 15) {
                 purpleParticles.push({
                     x: 0, y: 0, 
