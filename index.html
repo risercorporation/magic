@@ -87,7 +87,7 @@
         const canvasCtx = canvasElement.getContext('2d');
         const errorUI = document.getElementById('error-msg');
         const thunderAudio = document.getElementById('thunder_snd');
-        const purpleAudio = document.getElementById('purple_snd'); // VARIABLE ADDED
+        const purpleAudio = document.getElementById('purple_snd');
 
         let bridgeBlocks = []; 
         const PINCH_DIST = 40; 
@@ -150,7 +150,6 @@
             ctx.restore();
         }
 
-        // --- NEW: Fuga (Fire) Effect ---
         function drawFugaEffect(ctx, x, y) {
             ctx.save();
             let grad = ctx.createRadialGradient(x, y, 0, x, y, 150 * fugaIntensity);
@@ -164,7 +163,6 @@
             ctx.arc(x, y, 150 * fugaIntensity, 0, Math.PI * 2);
             ctx.fill();
 
-            // Fire sparks
             for(let i=0; i<5; i++) {
                 ctx.fillStyle = "white";
                 ctx.beginPath();
@@ -180,25 +178,32 @@
             if (purpleScale < 1) purpleScale += 0.04; 
             const baseRadius = 100 * purpleScale; 
 
-            // --- ADDED: SCREEN DIMMING & SCREEN LIGHTNING ---
+            // SCREEN DIMMING
             ctx.fillStyle = `rgba(15, 0, 30, ${0.4 * purpleScale})`;
             ctx.fillRect(-canvasElement.width, 0, canvasElement.width * 2, canvasElement.height);
 
-            if (Math.random() > 0.8) {
-                ctx.strokeStyle = "rgba(180, 0, 255, 0.8)";
-                ctx.lineWidth = 2;
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = "#ff00ff";
+            // --- ADDED: HIGH QUANTITY THUNDER STREAMS ---
+            const streamCount = 10; // High quantity of streams
+            ctx.strokeStyle = "rgba(180, 0, 255, 0.8)";
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = "#ff00ff";
+            
+            for(let i = 0; i < streamCount; i++) {
+                // Randomly generate thunder starting from different screen areas snapping to the hand
                 let startX = Math.random() * canvasElement.width;
                 let startY = Math.random() * canvasElement.height;
-                drawLightningAura(ctx, startX, startY, x, y, 40, 0.6);
+                // Only draw if starting point is far enough to look like a "stream"
+                if (Math.hypot(startX - x, startY - y) > 100) {
+                    drawLightningAura(ctx, startX, startY, x, y, 35, 0.5);
+                }
             }
 
-            if (purpleParticles.length < 15) {
+            if (purpleParticles.length < 25) { // Increased particle quantity
                 purpleParticles.push({
                     x: 0, y: 0, 
-                    vx: (Math.random() - 0.5) * 15, 
-                    vy: (Math.random() - 0.5) * 15,
+                    vx: (Math.random() - 0.5) * 20, 
+                    vy: (Math.random() - 0.5) * 20,
                     life: 1.0
                 });
             }
@@ -358,7 +363,6 @@
                     return landmarks.map(lm => ({ x: lm.x * canvasElement.width, y: lm.y * canvasElement.height }));
                 });
 
-                // Sukuna Domain Detection (Two Hands Joined)
                 if (hands.length === 2) {
                     const h1 = hands[0]; const h2 = hands[1];
                     const midDist = Math.hypot(h1[12].x - h2[12].x, h1[12].y - h2[12].y);
@@ -368,17 +372,15 @@
                 }
 
                 hands.forEach(pts => {
-                    // Gesture Logic
                     const isIndexUp = pts[8].y < pts[6].y;
                     const isMiddleUp = pts[12].y < pts[10].y;
                     const isRingDown = pts[16].y > pts[14].y;
                     const isPinkyDown = pts[20].y > pts[18].y;
 
-                    // FUGA GESTURE: Grip/C shape (Thumb vs Index gap)
                     const thumbTip = pts[4];
                     const indexTip = pts[8];
                     const gap = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
-                    if (gap > 50 && gap < 120 && pts[12].y > pts[10].y) { // C shape and middle down
+                    if (gap > 50 && gap < 120 && pts[12].y > pts[10].y) {
                         fugaActive = true;
                         fugaPos = {x: (thumbTip.x + indexTip.x)/2, y: (thumbTip.y + indexTip.y)/2};
                     }
@@ -390,7 +392,6 @@
                         drawHollowPurple(canvasCtx, (pts[8].x + pts[12].x) / 2, (pts[8].y + pts[12].y) / 2);
                     }
 
-                    // Hand skeleton
                     const connections = [[0,1],[1,2],[2,3],[3,4], [0,5],[5,6],[6,7],[7,8],[9,10],[10,11],[11,12], [13,14],[14,15],[15,16],[17,18],[18,19],[19,20], [0,17],[5,9],[9,13],[13,17]];
                     canvasCtx.beginPath();
                     connections.forEach(([i, j]) => { canvasCtx.moveTo(pts[i].x, pts[i].y); canvasCtx.lineTo(pts[j].x, pts[j].y); });
@@ -398,7 +399,6 @@
                     [4, 8, 12, 16, 20].forEach(i => drawDiamond(canvasCtx, pts[i].x, pts[i].y, 4));
                     [4, 8, 12, 16, 20].forEach(i => drawFingerCircle(canvasCtx, pts[i].x, pts[i].y, 10));
 
-                    // Block Pinching
                     if (Math.hypot(pts[4].x - pts[8].x, pts[4].y - pts[8].y) < PINCH_DIST) {
                         let midX = Math.round(((pts[4].x + pts[8].x) / 2) / SNAP_SIZE) * SNAP_SIZE;
                         let midY = Math.round(((pts[4].y + pts[8].y) / 2) / SNAP_SIZE) * SNAP_SIZE;
@@ -423,7 +423,6 @@
                 if (!thunderAudio.paused) thunderAudio.pause();
             }
 
-            // --- NAYA SOUND LOGIC ADDED ---
             if (hollowPurpleActive) {
                 if (purpleAudio.paused) purpleAudio.play().catch(e => {});
             } else {
@@ -433,12 +432,10 @@
                 }
             }
 
-            // Domain Intensity
             if (sukunaActive) { if (domainIntensity < 1) domainIntensity += 0.05; } 
             else { if (domainIntensity > 0) domainIntensity -= 0.05; }
             drawSukunaDomain(canvasCtx);
 
-            // Fuga Intensity
             if (fugaActive) { 
                 if (fugaIntensity < 1) fugaIntensity += 0.1; 
                 drawFugaEffect(canvasCtx, fugaPos.x, fugaPos.y);
