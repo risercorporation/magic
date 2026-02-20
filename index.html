@@ -96,9 +96,12 @@
         let purpleScale = 0; 
         let purpleParticles = [];
 
-        // --- NEW: Sukuna Domain Variables ---
+        // Sukuna Domain Variables
         let domainIntensity = 0;
         let domainSplashes = [];
+
+        // --- NEW: Fuga (Fire) Variables ---
+        let fugaIntensity = 0;
 
         function resize() {
             canvasElement.width = window.innerWidth;
@@ -107,16 +110,12 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // --- NEW: Sukuna Domain Visual Effect ---
         function drawSukunaDomain(ctx) {
             if (domainIntensity <= 0) return;
-
-            // 1. Darkness Overlay
             ctx.save();
             ctx.fillStyle = `rgba(0, 0, 0, ${domainIntensity * 0.6})`;
             ctx.fillRect(0, 0, canvasElement.width, canvasElement.height);
 
-            // 2. Generate Splashes
             if (Math.random() > 0.8 && domainSplashes.length < 15) {
                 domainSplashes.push({
                     x: Math.random() * canvasElement.width,
@@ -127,17 +126,14 @@
                 });
             }
 
-            // 3. Draw Splashes
             domainSplashes.forEach((s, i) => {
                 ctx.save();
                 ctx.translate(s.x, s.y);
                 ctx.rotate(s.rotation);
                 ctx.globalAlpha = s.opacity * domainIntensity;
-                ctx.fillStyle = "#1a0000"; // Deep dark red/black
+                ctx.fillStyle = "#1a0000"; 
                 ctx.shadowBlur = 30;
                 ctx.shadowColor = "red";
-                
-                // Irregular Ink Shape
                 ctx.beginPath();
                 for(let j=0; j<10; j++) {
                     let angle = (j/10) * Math.PI * 2;
@@ -147,13 +143,34 @@
                 ctx.closePath();
                 ctx.fill();
                 ctx.restore();
-
                 s.opacity -= 0.02;
                 if(s.opacity <= 0) domainSplashes.splice(i, 1);
             });
-
-            // 4. Global Brightness/Contrast Boost
             canvasElement.style.filter = `brightness(${1 + domainIntensity * 0.5}) contrast(${1 + domainIntensity})`;
+            ctx.restore();
+        }
+
+        // --- NEW: Fuga (Fire) Effect ---
+        function drawFugaEffect(ctx, x, y) {
+            ctx.save();
+            let grad = ctx.createRadialGradient(x, y, 0, x, y, 150 * fugaIntensity);
+            grad.addColorStop(0, 'rgba(255, 100, 0, 0.8)');
+            grad.addColorStop(0.5, 'rgba(255, 50, 0, 0.4)');
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = "#ff4400";
+            ctx.beginPath();
+            ctx.arc(x, y, 150 * fugaIntensity, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Fire sparks
+            for(let i=0; i<5; i++) {
+                ctx.fillStyle = "white";
+                ctx.beginPath();
+                ctx.arc(x + (Math.random()-0.5)*100, y + (Math.random()-0.5)*100, Math.random()*3, 0, Math.PI*2);
+                ctx.fill();
+            }
             ctx.restore();
         }
 
@@ -319,42 +336,38 @@
 
             let hollowPurpleActive = false;
             let sukunaActive = false;
-            let gojoSignDetected = false;
+            let fugaActive = false;
+            let fugaPos = {x: 0, y: 0};
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const hands = results.multiHandLandmarks.map(landmarks => {
                     return landmarks.map(lm => ({ x: lm.x * canvasElement.width, y: lm.y * canvasElement.height }));
                 });
 
-                // --- NEW GESTURE: Gojo Sign (Index/Middle Up, Others Down) ---
-                hands.forEach(pts => {
-                    const indexUp = pts[8].y < pts[6].y;
-                    const middleUp = pts[12].y < pts[10].y;
-                    const ringDown = pts[16].y > pts[14].y;
-                    const pinkyDown = pts[20].y > pts[18].y;
-                    if(indexUp && middleUp && ringDown && pinkyDown) gojoSignDetected = true;
-                });
-
-                // --- EXISTING: Sukuna Gesture Detection (Two Hands Joined) ---
+                // Sukuna Domain Detection (Two Hands Joined)
                 if (hands.length === 2) {
                     const h1 = hands[0]; const h2 = hands[1];
                     const midDist = Math.hypot(h1[12].x - h2[12].x, h1[12].y - h2[12].y);
                     const isH1Bent = h1[8].y > h1[6].y && h1[20].y > h1[18].y;
                     const isH2Bent = h2[8].y > h2[6].y && h2[20].y > h2[18].y;
-                    
-                    if (midDist < 80 && isH1Bent && isH2Bent) {
-                        sukunaActive = true;
-                    }
+                    if (midDist < 60 && isH1Bent && isH2Bent) { sukunaActive = true; }
                 }
 
-                // Activate Domain if either gesture is found
-                if (gojoSignDetected) sukunaActive = true;
-
                 hands.forEach(pts => {
+                    // Gesture Logic
                     const isIndexUp = pts[8].y < pts[6].y;
                     const isMiddleUp = pts[12].y < pts[10].y;
                     const isRingDown = pts[16].y > pts[14].y;
                     const isPinkyDown = pts[20].y > pts[18].y;
+
+                    // FUGA GESTURE: Grip/C shape (Thumb vs Index gap)
+                    const thumbTip = pts[4];
+                    const indexTip = pts[8];
+                    const gap = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+                    if (gap > 50 && gap < 120 && pts[12].y > pts[10].y) { // C shape and middle down
+                        fugaActive = true;
+                        fugaPos = {x: (thumbTip.x + indexTip.x)/2, y: (thumbTip.y + indexTip.y)/2};
+                    }
 
                     if(!isIndexUp && !isMiddleUp && isRingDown && isPinkyDown) { bridgeBlocks = []; }
 
@@ -363,6 +376,7 @@
                         drawHollowPurple(canvasCtx, (pts[8].x + pts[12].x) / 2, (pts[8].y + pts[12].y) / 2);
                     }
 
+                    // Hand skeleton
                     const connections = [[0,1],[1,2],[2,3],[3,4], [0,5],[5,6],[6,7],[7,8],[9,10],[10,11],[11,12], [13,14],[14,15],[15,16],[17,18],[18,19],[19,20], [0,17],[5,9],[9,13],[13,17]];
                     canvasCtx.beginPath();
                     connections.forEach(([i, j]) => { canvasCtx.moveTo(pts[i].x, pts[i].y); canvasCtx.lineTo(pts[j].x, pts[j].y); });
@@ -370,10 +384,10 @@
                     [4, 8, 12, 16, 20].forEach(i => drawDiamond(canvasCtx, pts[i].x, pts[i].y, 4));
                     [4, 8, 12, 16, 20].forEach(i => drawFingerCircle(canvasCtx, pts[i].x, pts[i].y, 10));
 
-                    const thumb = pts[4]; const index = pts[8];
-                    if (Math.hypot(thumb.x - index.x, thumb.y - index.y) < PINCH_DIST) {
-                        let midX = Math.round(((thumb.x + index.x) / 2) / SNAP_SIZE) * SNAP_SIZE;
-                        let midY = Math.round(((thumb.y + index.y) / 2) / SNAP_SIZE) * SNAP_SIZE;
+                    // Block Pinching
+                    if (Math.hypot(pts[4].x - pts[8].x, pts[4].y - pts[8].y) < PINCH_DIST) {
+                        let midX = Math.round(((pts[4].x + pts[8].x) / 2) / SNAP_SIZE) * SNAP_SIZE;
+                        let midY = Math.round(((pts[4].y + pts[8].y) / 2) / SNAP_SIZE) * SNAP_SIZE;
                         if (bridgeBlocks.length === 0 || Math.hypot(midX - bridgeBlocks[bridgeBlocks.length-1].x, midY - bridgeBlocks[bridgeBlocks.length-1].y) >= SNAP_SIZE) {
                             bridgeBlocks.push({x: midX, y: midY});
                         }
@@ -395,13 +409,18 @@
                 if (!thunderAudio.paused) thunderAudio.pause();
             }
 
-            // --- Sukuna Domain Intensity Logic ---
-            if (sukunaActive) {
-                if (domainIntensity < 1) domainIntensity += 0.05;
-            } else {
-                if (domainIntensity > 0) domainIntensity -= 0.05;
-            }
+            // Domain Intensity
+            if (sukunaActive) { if (domainIntensity < 1) domainIntensity += 0.05; } 
+            else { if (domainIntensity > 0) domainIntensity -= 0.05; }
             drawSukunaDomain(canvasCtx);
+
+            // Fuga Intensity
+            if (fugaActive) { 
+                if (fugaIntensity < 1) fugaIntensity += 0.1; 
+                drawFugaEffect(canvasCtx, fugaPos.x, fugaPos.y);
+            } else { 
+                fugaIntensity = 0; 
+            }
 
             if(!hollowPurpleActive) { purpleScale = 0; purpleParticles = []; }
             if(domainIntensity <= 0.01) canvasElement.style.filter = "none";
