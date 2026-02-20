@@ -319,25 +319,36 @@
 
             let hollowPurpleActive = false;
             let sukunaActive = false;
+            let gojoSignDetected = false;
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const hands = results.multiHandLandmarks.map(landmarks => {
                     return landmarks.map(lm => ({ x: lm.x * canvasElement.width, y: lm.y * canvasElement.height }));
                 });
 
-                // --- NEW: Sukuna Gesture Detection (Two Hands Joined) ---
+                // --- NEW GESTURE: Gojo Sign (Index/Middle Up, Others Down) ---
+                hands.forEach(pts => {
+                    const indexUp = pts[8].y < pts[6].y;
+                    const middleUp = pts[12].y < pts[10].y;
+                    const ringDown = pts[16].y > pts[14].y;
+                    const pinkyDown = pts[20].y > pts[18].y;
+                    if(indexUp && middleUp && ringDown && pinkyDown) gojoSignDetected = true;
+                });
+
+                // --- EXISTING: Sukuna Gesture Detection (Two Hands Joined) ---
                 if (hands.length === 2) {
                     const h1 = hands[0]; const h2 = hands[1];
                     const midDist = Math.hypot(h1[12].x - h2[12].x, h1[12].y - h2[12].y);
-                    
-                    // Logic: Middle fingers touching + Index & Pinky bent
                     const isH1Bent = h1[8].y > h1[6].y && h1[20].y > h1[18].y;
                     const isH2Bent = h2[8].y > h2[6].y && h2[20].y > h2[18].y;
                     
-                    if (midDist < 60 && isH1Bent && isH2Bent) {
+                    if (midDist < 80 && isH1Bent && isH2Bent) {
                         sukunaActive = true;
                     }
                 }
+
+                // Activate Domain if either gesture is found
+                if (gojoSignDetected) sukunaActive = true;
 
                 hands.forEach(pts => {
                     const isIndexUp = pts[8].y < pts[6].y;
@@ -384,7 +395,7 @@
                 if (!thunderAudio.paused) thunderAudio.pause();
             }
 
-            // --- NEW: Sukuna Domain Intensity Logic ---
+            // --- Sukuna Domain Intensity Logic ---
             if (sukunaActive) {
                 if (domainIntensity < 1) domainIntensity += 0.05;
             } else {
